@@ -3,7 +3,7 @@ import numpy as np
 
 class NeuralNet(object):
 	"""docstring for NeuralNet"""
-	def __init__(self, num_input_layer, num_output_layer, num_hidden_layers, list_num_neurons_per_hidden, batch_size=1, _learning_rate=0.01):
+	def __init__(self, num_input_layer, num_output_layer, num_hidden_layers, list_num_neurons_per_hidden, batch_size=1, _learning_rate=0.01, _l2_regularization=0.0, _drop_prob = 0.0):
 		self.n_in = num_input_layer  # number of neurons on the input layer
 		self.n_out = num_output_layer  # number of neurons on the output layer
 		self.depth = num_hidden_layers + 2  # total number of layers in the model
@@ -30,6 +30,12 @@ class NeuralNet(object):
 		self.modified_error_dict ={}  # store backward propagation result
 		self.net_input = np.zeros((self.n_in, batch_size))
 
+		# Add-on param
+		self.l2_regu = _l2_regularization
+		self.keep_prob = 1.0 - _drop_prob
+		self.cut_list = []
+
+
 
 	def layerAct(self, x):
 		return 1 / (1 + np.exp(-x))
@@ -45,8 +51,17 @@ class NeuralNet(object):
 
 
 	def netForwardProp(self):
-		#TODO something wrong here
-		# print self.net_input.shape
+		# reset cut_list
+		self.cut_list = []
+		# Go through weights dictionary and keep the connection with probability self.keep_prob
+		for key in self.weights_dict.keys():
+			for i in range(self.weights_dict[key].shape[0]):
+				keep = np.random.uniform(0, 1) < self.keep_prob
+				if not keep:
+					# set this row to zeros
+					self.weights_dict[key][i, :] = 0
+					self.cut_list.append(i)
+
 		m = self.net_input.shape[1]
 		vec_one = np.zeros((1, m)) + 1 
 		for key in self.weights_dict.keys():
@@ -60,6 +75,11 @@ class NeuralNet(object):
 
 		# return np.exp(self.weighted_input_dict[self.depth - 1]) / np.sum((np.exp(self.weighted_input_dict[self.depth - 1])), axis=0)  #softmax
 		return self.layerAct(self.weighted_input_dict[self.depth - 1])
+
+
+	def netWeightsRestore(self):
+		for key in self.weights_dict.keys():
+			self.weights_dict[key] *=  self.keep_prob
 
 
 	def netBackProp(self, true_labels):
@@ -76,13 +96,16 @@ class NeuralNet(object):
 		m = self.net_input.shape[1]
 		vec_one = np.zeros((1, m)) + 1
 		for i in range(1, self.depth):
-			# update weight matrixes
-			if i == 1:
-				self.weights_dict[i] -= (alpha / m) * np.matmul(self.modified_error_dict[i], self.net_input.transpose())
-			else:
-				self.weights_dict[i] -= (alpha / m) * np.matmul(self.modified_error_dict[i], self.layerAct(self.weighted_input_dict[i - 1]).transpose())
-			# update biases
-			self.biases_dict[i] -= (alpha / m) * np.matmul(self.modified_error_dict[i], vec_one.transpose())
+			# Normal loss update
+			if i not in self.cut_list:
+				if i == 1:
+					self.weights_dict[i] -= (alpha / m) * np.matmul(self.modified_error_dict[i], self.net_input.transpose()) + \
+					(self.l2_regu / m) * self.weights_dict[i]  # L2 regularization loss
+				else:
+					self.weights_dict[i] -= (alpha / m) * np.matmul(self.modified_error_dict[i], self.layerAct(self.weighted_input_dict[i - 1]).transpose()) + \
+					(self.l2_regu / m) * self.weights_dict[i]  # L2 regularization loss
+				# update biases
+				self.biases_dict[i] -= (alpha / m) * np.matmul(self.modified_error_dict[i], vec_one.transpose())
 
 
 	def netEval(self, test_data, test_label):

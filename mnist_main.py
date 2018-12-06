@@ -29,10 +29,10 @@ print 'Test data is loaded'
 img_size = 28 * 28
 batch_size = 10
 learning_rate = 0.5
-model = NeuralNet(img_size, 10, 1, [30], batch_size, learning_rate)
+model = NeuralNet(img_size, 10, 1, [30], batch_size, learning_rate, 0.1, 0.1)
 
 epoch = 0
-max_epoch = 2
+max_epoch = 10
 while epoch < max_epoch:
 	# shuffle the training set
 	_index = np.random.permutation(train_images.shape[0])
@@ -54,10 +54,8 @@ while epoch < max_epoch:
 	epoch += 1
 	print '***********************************************************'
 
-one_img = test_images[0:2, :].transpose()
-one_label = test_labels[0:2, :].transpose()
-model.netFedInput(one_img)
-predict = model.netForwardProp()
+#Restore weights
+model.netWeightsRestore()
 
-print 'predict: ', predict
-print 'Encoded label: ', one_label
+correct = model.netEval(test_images.transpose(), test_labels.transpose())
+print "End model\t Correct guess: %f%%" % (correct*100)
